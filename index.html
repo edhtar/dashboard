@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ED htar Dashboard · Sistem Kecemasan</title>
+<style>
+html, body { margin:0; padding:0; height:100%; width:100%; font-family:'Segoe UI',sans-serif; background:#0f172a; color:white;}
+header { background:#111827; padding:10px 20px; text-align:center; border-bottom:3px solid #1f2937;}
+header h1 { margin:0; font-size:2em; font-weight:600; }
+header #dateTime { font-size:1em; opacity:0.8; }
+button { padding:10px 20px; margin:5px; border-radius:8px; border:none; cursor:pointer; font-weight:bold;}
+.btn-primary{background:#2563eb;color:white;}
+.btn-success{background:#16a34a;color:white;}
+.btn-danger{background:#dc2626;color:white;}
+.btn-warning{background:#f59e0b;color:white;}
+.btn-sm { padding:5px 10px; font-size:0.8em; margin:2px; }
+.container{padding:20px; overflow:auto;}
+.card { background:#1e293b; border-radius:15px; padding:20px; margin:10px; display:flex; flex-direction:column; justify-content:center; box-shadow:0 0 20px rgba(0,0,0,0.5);}
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:15px;}
+.stat { font-size:2em; font-weight:bold; text-align:center; }
+.status-normal{color:#22c55e;font-weight:bold;}
+.status-gangguan{color:#ef4444;font-weight:bold;}
+.zon-merah{border-left:8px solid #ef4444;}
+.zon-kuning{border-left:8px solid #facc15;}
+.zon-hijau{border-left:8px solid #22c55e;}
+.login-box{max-width:400px;margin:150px auto;padding:20px;background:#1e293b;border-radius:15px;text-align:center;}
+input, select{width:100%;padding:12px;margin-bottom:15px;border-radius:6px;border:none;background:#334155;color:white;font-size:1em;}
+.table-container { overflow-x:auto; margin-top:15px; }
+table { min-width:1400px; border-collapse: collapse; color:white; font-size:0.9em;}
+th, td { border:1px solid #334155; padding:6px; text-align:center; }
+th { background:#1f2937; }
+.sync-status { padding:10px; margin:10px 0; border-radius:8px; display:none; }
+.sync-success { background:#16a34a; color:white; }
+.sync-error { background:#dc2626; color:white; }
+.sync-loading { background:#f59e0b; color:white; }
+.refresh-btn { margin-left:10px; padding:5px 15px; }
+.action-buttons { display:flex; gap:5px; justify-content:center; }
+@media print { body,html{background:#fff;color:#000;} .card{background:#f0f0f0;color:#000;} header,button{display:none;} }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginPage" class="login-box">
+<h2>🔐 ED LOGIN</h2>
+<input type="text" id="username" placeholder="Username">
+<input type="password" id="password" placeholder="Password">
+<button class="btn-primary" onclick="login()">Login</button>
+<p id="loginMsg" style="color:red;"></p>
+</div>
+
+<!-- MAIN SYSTEM -->
+<div id="mainSystem" style="display:none;">
+<header>
+<h1>🏥 EMERGENCY DEPARTMENT DASHBOARD</h1>
+<div id="dateTime"></div>
+<span id="welcomeUser"></span><br>
+<button class="btn-primary" id="btnEntry" onclick="showEntry()">📋 Data Entry</button>
+<button class="btn-success" onclick="showDashboard()">📊 Dashboard</button>
+<button class="btn-warning" onclick="syncFromSheet()">🔄 Sync dari Google Sheet</button>
+<button class="btn-danger" onclick="logout()">🚪 Logout</button>
+</header>
+
+<div class="container">
+
+<!-- STATUS SYNC -->
+<div id="syncStatus" class="sync-status"></div>
+
+<!-- DATA ENTRY -->
+<div id="entry" style="display:none;">
+<div class="grid">
+<div class="card zon-merah">
+<h3>🟥 Zon Merah</h3>
+<label>Merah <input type="number" id="zonMerah" value="0"></label>
+</div>
+
+<!-- ZON KANAK-KANAK - SEKARANG GUNA CARD BIASA (TANPA PINK) -->
+<div class="card">
+<h3>🌸 Zon Kanak-Kanak</h3>
+<label>Kanak-Kanak <input type="number" id="zonKanak" value="0"></label>
+</div>
+
+<div class="card zon-kuning">
+<h3>🟨 Zon Kuning (auto)</h3>
+<label>Keseluruhan Kuning <input type="number" id="zonKuning" readonly></label>
+<label>Yellow Medical <input type="number" id="yellowMedical" value="0" oninput="updateKuning()"></label>
+<label>Yellow Trauma <input type="number" id="yellowTrauma" value="0" oninput="updateKuning()"></label>
+<label>CCARS <input type="number" id="ccars" value="0" oninput="updateKuning()"></label>
+</div>
+<div class="card zon-hijau">
+<h3>🟩 Zon Hijau & LOS</h3>
+<label>Hijau <input type="number" id="zonHijau" value="0"></label>
+<label>LOS Psikiatrik (jam) <input type="number" id="losPsikiatrik" value="0"></label>
+<label>LOS Zon Hijau (jam) <input type="number" id="losHijau" value="0"></label>
+</div>
+<div class="card">
+<h3>🚨 Kes Kecemasan</h3>
+<label>Code Blue <input type="number" id="codeBlue" value="0"></label>
+<label>Code Gray <input type="number" id="codeGray" value="0"></label>
+<label>Code Black <input type="number" id="codeBlack" value="0"></label>
+</div>
+<div class="card">
+<h3>⏳ CNA & AOR</h3>
+<label>CNA <input type="number" id="cna" value="0"></label>
+<label>AOR <input type="number" id="aor" value="0"></label>
+</div>
+<div class="card">
+<h3>🫁 Status Ventilator</h3>
+<label>Baik & Sedia <input type="number" id="ventBaik" value="0"></label>
+<label>Rosak <input type="number" id="ventRosak" value="0"></label>
+<label>Sedang Dibaiki <input type="number" id="ventRepair" value="0"></label>
+</div>
+<div class="card">
+<h3>🏢 Status Premis</h3>
+<label>Elektrik <select id="elektrik"><option>Normal</option><option>Gangguan</option></select></label>
+<label>Air <select id="air"><option>Normal</option><option>Gangguan</option></select></label>
+<label>Aircond <select id="aircond"><option>Normal</option><option>Gangguan</option></select></label>
+<label>Pneumatic Tube <select id="tube"><option>Normal</option><option>Gangguan</option></select></label>
+</div>
+</div>
+
+<!-- SIMPAN DATA -->
+<button class="btn-success" onclick="saveData()">💾 Simpan Data ke Google Sheet</button>
+
+<h3>📋 Data Terkini dari Google Sheet</h3>
+<div class="table-container">
+<table id="dataListTable">
+<thead>
+<tr>
+<th>Tarikh</th><th>Merah</th><th>Kanak</th><th>Kuning</th><th>Yellow Med</th><th>Yellow Trauma</th><th>CCARS</th><th>Hijau</th><th>Psikiatrik</th><th>LOS Hijau</th><th>Blue</th><th>Gray</th><th>Black</th><th>CNA</th><th>AOR</th><th>Vent Baik</th><th>Vent Rosak</th><th>Vent Repair</th><th>Elektrik</th><th>Air</th><th>Aircond</th><th>Tube</th><th>Tindakan</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+</div> <!-- tutup entry -->
+
+<!-- DASHBOARD -->
+<div id="dashboard" style="display:none;">
+<div id="printArea">
+<div class="grid">
+<div class="card zon-merah"><h3>🟥 Zon Merah</h3><div class="stat" id="dMerah">0</div></div>
+<div class="card"><h3>🌸 Kanak-Kanak</h3><div class="stat" id="dKanak">0</div></div>
+<div class="card zon-kuning"><h3>🟨 Zon Kuning</h3><div class="stat" id="dKuning">0</div><div>Medical: <span id="dMedical"></span> | Trauma: <span id="dTrauma"></span> | CCARS: <span id="dCc"></span></div></div>
+<div class="card zon-hijau"><h3>🟩 Zon Hijau</h3><div class="stat" id="dHijau">0</div></div>
+<div class="card"><h3>🔢 Jumlah Pesakit</h3><div class="stat" id="dTotal">0</div></div>
+<div class="card"><h3>⏱️ LOS (jam)</h3>Psikiatrik: <span class="stat" id="dLosPsi">0</span><br>Hijau: <span class="stat" id="dLosHijau">0</span></div>
+<div class="card"><h3>🚨 Kes</h3>Blue: <span class="stat" id="dBlue">0</span><br>Gray: <span class="stat" id="dGray">0</span><br>Black: <span class="stat" id="dBlack">0</span></div>
+<div class="card"><h3>⏳ CNA/AOR</h3>CNA: <span class="stat" id="dCna">0</span><br>AOR: <span class="stat" id="dAor">0</span></div>
+<div class="card"><h3>🫁 Ventilator</h3>Baik: <span id="dVentBaik">0</span><br>Rosak: <span id="dVentRosak">0</span><br>Dibaiki: <span id="dVentRepair">0</span></div>
+<div class="card"><h3>🏢 Premis</h3>Elektrik: <span id="dElektrik"></span><br>Air: <span id="dAir"></span><br>Aircond: <span id="dAircond"></span><br>Tube: <span id="dTube"></span></div>
+</div>
+<button class="btn-success" onclick="printReport()">🖨️ Print Laporan</button>
+<button class="btn-warning" onclick="syncFromSheet()">🔄 Sync Data Terkini</button>
+</div>
+</div> <!-- tutup dashboard -->
+
+</div> <!-- tutup container -->
+</div> <!-- tutup mainSystem -->
+
+<script>
+// ===== GOOGLE SHEET WEB APP URL =====
+const sheetURL = "https://script.google.com/macros/s/AKfycbwLZ-Btf-TWGYo3c3Vz9yP69sb2pfFynu4VAiQ5SW5kQd3BA_D6jZ595nFieDq6P2CGug/exec";
+
+// ===== LOGIN DENGAN USERNAME DAN PASSWORD BARU =====
+const accounts=[
+  {username:"admin",password:"admin123",role:"admin"},
+  {username:"user",password:"user123",role:"user"}
+];
+
+function login(){
+  const u = document.getElementById('username').value; 
+  const p = document.getElementById('password').value; 
+  const acc = accounts.find(a => a.username === u && a.password === p); 
+  if(acc){ 
+    localStorage.setItem("currentUser", JSON.stringify(acc)); 
+    loadSystem(); 
+  } else {
+    document.getElementById('loginMsg').innerText = "Username / Password salah!"; 
+  }
+}
+
+function loadSystem(){
+  const user = JSON.parse(localStorage.getItem("currentUser")); 
+  if(!user) return; 
+  document.getElementById('loginPage').style.display = "none"; 
+  document.getElementById('mainSystem').style.display = "block"; 
+  document.getElementById('welcomeUser').innerText = "Login sebagai: " + user.role.toUpperCase(); 
+  if(user.role === "user"){ 
+    document.getElementById("btnEntry").style.display = "none"; 
+    document.getElementById('entry').style.display = "none"; 
+    showDashboard(); 
+  } else { 
+    document.getElementById('entry').style.display = "block"; 
+    syncFromSheet(); // Auto sync bila buka
+  }
+}
+
+function logout(){ 
+  localStorage.removeItem("currentUser"); 
+  location.reload(); 
+}
+
+function showEntry(){ 
+  document.getElementById('entry').style.display = "block"; 
+  document.getElementById('dashboard').style.display = "none"; 
+  syncFromSheet(); // Refresh data bila buka entry
+}
+
+function showDashboard(){ 
+  document.getElementById('entry').style.display = "none"; 
+  document.getElementById('dashboard').style.display = "block"; 
+  loadDashboardFromSheet(); // Guna data dari sheet untuk dashboard
+}
+
+function updateKuning(){ 
+  let med = parseInt(document.getElementById('yellowMedical').value) || 0;
+  let trauma = parseInt(document.getElementById('yellowTrauma').value) || 0;
+  let cc = parseInt(document.getElementById('ccars').value) || 0;
+  document.getElementById('zonKuning').value = med + trauma + cc; 
+}
+
+// ===== SYNC DATA DARI GOOGLE SHEET =====
+function syncFromSheet(){
+  showSyncStatus('loading', '⏳ Mengambil data dari Google Sheet...');
+  
+  fetch(sheetURL + "?t=" + new Date().getTime(), { // Tambah timestamp elak cache
+    method: "GET",
+    mode: "cors"
+  })
+  .then(response => response.json())
+  .then(result => {
+    if(result.success && result.data){
+      // Simpan dalam localStorage untuk kegunaan offline
+      localStorage.setItem("sheetData", JSON.stringify(result.data));
+      showSyncStatus('success', `✅ Berjaya sync ${result.data.length} rekod dari Google Sheet`);
+      
+      // Paparkan dalam jadual dengan butang edit dan delete
+      displaySheetDataWithActions(result.data);
+      
+      // Update dashboard jika sedang dipaparkan
+      if(document.getElementById('dashboard').style.display === 'block'){
+        loadDashboardFromSheet();
+      }
+    } else {
+      showSyncStatus('error', '❌ Gagal mendapat data: ' + (result.error || 'unknown error'));
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    showSyncStatus('error', '❌ Ralat sambungan ke Google Sheet. Cuba lagi.');
+  });
+}
+
+function showSyncStatus(type, message){
+  const statusDiv = document.getElementById('syncStatus');
+  statusDiv.style.display = 'block';
+  statusDiv.className = 'sync-status sync-' + type;
+  statusDiv.innerHTML = message;
+  
+  if(type !== 'loading'){
+    setTimeout(() => {
+      statusDiv.style.display = 'none';
+    }, 5000);
+  }
+}
+
+// Fungsi baru untuk paparkan data dengan butang edit dan delete
+function displaySheetDataWithActions(data){
+  const tbody = document.querySelector("#dataListTable tbody"); 
+  tbody.innerHTML = "";
+  
+  // Ambil 20 rekod terkini sahaja
+  const recentData = data.slice(0, 20);
+  
+  recentData.forEach((row, index) => {
+    const tr = document.createElement("tr");
+    
+    // Format timestamp
+    let timestamp = row.Timestamp || '';
+    if(timestamp && timestamp.includes('T')){
+      const date = new Date(timestamp);
+      timestamp = date.toLocaleString('ms-MY');
+    }
+    
+    // Dapatkan ID unik (guna ID dari row atau buat baru)
+    const rowId = row.ID || row.id || `row_${index}_${Date.now()}`;
+    
+    tr.innerHTML = `
+      <td>${timestamp}</td>
+      <td>${row['Zon Merah'] || row.zonMerah || 0}</td>
+      <td>${row['Zon Kanak'] || row.zonKanak || 0}</td>
+      <td>${row['Zon Kuning'] || row.zonKuning || 0}</td>
+      <td>${row['Yellow Medical'] || row.yellowMedical || 0}</td>
+      <td>${row['Yellow Trauma'] || row.yellowTrauma || 0}</td>
+      <td>${row['CCARS'] || row.ccars || 0}</td>
+      <td>${row['Zon Hijau'] || row.zonHijau || 0}</td>
+      <td>${row['LOS Psikiatrik'] || row.losPsikiatrik || 0}</td>
+      <td>${row['LOS Hijau'] || row.losHijau || 0}</td>
+      <td>${row['Code Blue'] || row.codeBlue || 0}</td>
+      <td>${row['Code Gray'] || row.codeGray || 0}</td>
+      <td>${row['Code Black'] || row.codeBlack || 0}</td>
+      <td>${row['CNA'] || row.cna || 0}</td>
+      <td>${row['AOR'] || row.aor || 0}</td>
+      <td>${row['Vent Baik'] || row.ventBaik || 0}</td>
+      <td>${row['Vent Rosak'] || row.ventRosak || 0}</td>
+      <td>${row['Vent Repair'] || row.ventRepair || 0}</td>
+      <td>${row['Elektrik'] || row.elektrik || 'Normal'}</td>
+      <td>${row['Air'] || row.air || 'Normal'}</td>
+      <td>${row['Aircond'] || row.aircond || 'Normal'}</td>
+      <td>${row['Tube'] || row.tube || 'Normal'}</td>
+      <td>
+        <div class="action-buttons">
+          <button class="btn-primary btn-sm" onclick='editSheetData(${JSON.stringify(row).replace(/'/g, "\\'")})'>Edit</button>
+          <button class="btn-danger btn-sm" onclick='deleteSheetData(${JSON.stringify(row).replace(/'/g, "\\'")})'>Delete</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  
+  if(recentData.length === 0){
+    tbody.innerHTML = '<tr><td colspan="23" style="text-align:center">Tiada data dalam Google Sheet</td></tr>';
+  }
+}
+
+// Fungsi Edit untuk data dari Google Sheet
+function editSheetData(rowData){
+  // Map data dari format sheet ke format input
+  const data = {
+    zonMerah: rowData['Zon Merah'] || rowData.zonMerah || 0,
+    zonKanak: rowData['Zon Kanak'] || rowData.zonKanak || 0,
+    zonKuning: rowData['Zon Kuning'] || rowData.zonKuning || 0,
+    yellowMedical: rowData['Yellow Medical'] || rowData.yellowMedical || 0,
+    yellowTrauma: rowData['Yellow Trauma'] || rowData.yellowTrauma || 0,
+    ccars: rowData['CCARS'] || rowData.ccars || 0,
+    zonHijau: rowData['Zon Hijau'] || rowData.zonHijau || 0,
+    losPsikiatrik: rowData['LOS Psikiatrik'] || rowData.losPsikiatrik || 0,
+    losHijau: rowData['LOS Hijau'] || rowData.losHijau || 0,
+    codeBlue: rowData['Code Blue'] || rowData.codeBlue || 0,
+    codeGray: rowData['Code Gray'] || rowData.codeGray || 0,
+    codeBlack: rowData['Code Black'] || rowData.codeBlack || 0,
+    cna: rowData['CNA'] || rowData.cna || 0,
+    aor: rowData['AOR'] || rowData.aor || 0,
+    ventBaik: rowData['Vent Baik'] || rowData.ventBaik || 0,
+    ventRosak: rowData['Vent Rosak'] || rowData.ventRosak || 0,
+    ventRepair: rowData['Vent Repair'] || rowData.ventRepair || 0,
+    elektrik: rowData['Elektrik'] || rowData.elektrik || 'Normal',
+    air: rowData['Air'] || rowData.air || 'Normal',
+    aircond: rowData['Aircond'] || rowData.aircond || 'Normal',
+    tube: rowData['Tube'] || rowData.tube || 'Normal',
+    editId: rowData.ID || rowData.id || Date.now() // Simpan ID untuk edit
+  };
+  
+  // Isi input dengan data
+  document.getElementById('zonMerah').value = data.zonMerah;
+  document.getElementById('zonKanak').value = data.zonKanak;
+  document.getElementById('yellowMedical').value = data.yellowMedical;
+  document.getElementById('yellowTrauma').value = data.yellowTrauma;
+  document.getElementById('ccars').value = data.ccars;
+  document.getElementById('zonHijau').value = data.zonHijau;
+  document.getElementById('losPsikiatrik').value = data.losPsikiatrik;
+  document.getElementById('losHijau').value = data.losHijau;
+  document.getElementById('codeBlue').value = data.codeBlue;
+  document.getElementById('codeGray').value = data.codeGray;
+  document.getElementById('codeBlack').value = data.codeBlack;
+  document.getElementById('cna').value = data.cna;
+  document.getElementById('aor').value = data.aor;
+  document.getElementById('ventBaik').value = data.ventBaik;
+  document.getElementById('ventRosak').value = data.ventRosak;
+  document.getElementById('ventRepair').value = data.ventRepair;
+  document.getElementById('elektrik').value = data.elektrik;
+  document.getElementById('air').value = data.air;
+  document.getElementById('aircond').value = data.aircond;
+  document.getElementById('tube').value = data.tube;
+  
+  updateKuning();
+  
+  // Tunjukkan mesej bahawa ini adalah edit mode
+  showSyncStatus('success', '✏️ Data dimuatkan untuk edit. Sila simpan selepas perubahan.');
+  
+  // Scroll ke bahagian input
+  document.querySelector('.grid').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Fungsi Delete untuk data dari Google Sheet
+function deleteSheetData(rowData){
+  if(confirm('Adakah anda pasti mahu memadam data ini dari Google Sheet?')){
+    
+    const deleteData = {
+      ...rowData,
+      deleted: true,
+      id: rowData.ID || rowData.id || Date.now()
+    };
+    
+    showSyncStatus('loading', '⏳ Menghantar arahan delete ke Google Sheet...');
+    
+    fetch(sheetURL, {
+      method: "POST",
+      mode: "no-cors",
+      body: JSON.stringify(deleteData),
+      headers: {"Content-Type": "application/json"}
+    })
+    .then(() => {
+      showSyncStatus('success', '✅ Arahan delete dihantar. Data akan dikemaskini...');
+      
+      // Refresh data selepas 2 saat
+      setTimeout(() => {
+        syncFromSheet();
+      }, 2000);
+    })
+    .catch(err => {
+      showSyncStatus('error', '❌ Ralat menghantar arahan delete');
+      console.error(err);
+    });
+  }
+}
+
+// ===== SAVE DATA KE GOOGLE SHEET =====
+function saveData(){
+  updateKuning();
+  
+  const data = {
+    zonMerah: document.getElementById('zonMerah').value || 0,
+    zonKanak: document.getElementById('zonKanak').value || 0,
+    zonKuning: document.getElementById('zonKuning').value || 0,
+    yellowMedical: document.getElementById('yellowMedical').value || 0,
+    yellowTrauma: document.getElementById('yellowTrauma').value || 0,
+    ccars: document.getElementById('ccars').value || 0,
+    zonHijau: document.getElementById('zonHijau').value || 0,
+    losPsikiatrik: document.getElementById('losPsikiatrik').value || 0,
+    losHijau: document.getElementById('losHijau').value || 0,
+    codeBlue: document.getElementById('codeBlue').value || 0,
+    codeGray: document.getElementById('codeGray').value || 0,
+    codeBlack: document.getElementById('codeBlack').value || 0,
+    cna: document.getElementById('cna').value || 0,
+    aor: document.getElementById('aor').value || 0,
+    ventBaik: document.getElementById('ventBaik').value || 0,
+    ventRosak: document.getElementById('ventRosak').value || 0,
+    ventRepair: document.getElementById('ventRepair').value || 0,
+    elektrik: document.getElementById('elektrik').value,
+    air: document.getElementById('air').value,
+    aircond: document.getElementById('aircond').value,
+    tube: document.getElementById('tube').value,
+    id: new Date().getTime()
+  };
+
+  showSyncStatus('loading', '⏳ Menghantar data ke Google Sheet...');
+
+  fetch(sheetURL, {
+    method: "POST",
+    mode: "no-cors",
+    body: JSON.stringify(data),
+    headers: {"Content-Type": "application/json"}
+  })
+  .then(() => {
+    showSyncStatus('success', '✅ Data berjaya dihantar ke Google Sheet!');
+    
+    // Kosongkan input
+    const inputIds = ['zonMerah','zonKanak','zonKuning','yellowMedical','yellowTrauma','ccars','zonHijau','losPsikiatrik','losHijau','codeBlue','codeGray','codeBlack','cna','aor','ventBaik','ventRosak','ventRepair'];
+    inputIds.forEach(id => document.getElementById(id).value = '0');
+    ['elektrik','air','aircond','tube'].forEach(id => document.getElementById(id).selectedIndex = 0);
+    
+    // Sync balik untuk dapatkan data terkini
+    setTimeout(syncFromSheet, 2000);
+  })
+  .catch(err => {
+    showSyncStatus('error', '❌ Ralat hantar ke Google Sheet, tetapi data disimpan tempatan');
+    console.error(err);
+  });
+}
+
+// ===== LOAD DASHBOARD DARI SHEET DATA =====
+function loadDashboardFromSheet(){
+  const sheetData = JSON.parse(localStorage.getItem("sheetData")) || [];
+  
+  if(sheetData.length === 0){
+    // Cuba sync dulu
+    syncFromSheet();
+    return;
+  }
+  
+  // Ambil data terkini (index 0 sebab kita reverse dalam Apps Script)
+  const data = sheetData[0];
+  
+  if(!data) return;
+  
+  document.getElementById('dMerah').innerText = data['Zon Merah'] || data.zonMerah || 0; 
+  document.getElementById('dKanak').innerText = data['Zon Kanak'] || data.zonKanak || 0; 
+  document.getElementById('dKuning').innerText = data['Zon Kuning'] || data.zonKuning || 0;
+  document.getElementById('dMedical').innerText = data['Yellow Medical'] || data.yellowMedical || 0; 
+  document.getElementById('dTrauma').innerText = data['Yellow Trauma'] || data.yellowTrauma || 0; 
+  document.getElementById('dCc').innerText = data['CCARS'] || data.ccars || 0; 
+  document.getElementById('dHijau').innerText = data['Zon Hijau'] || data.zonHijau || 0;
+  
+  let total = (parseInt(data['Zon Merah'] || data.zonMerah) || 0) + 
+              (parseInt(data['Zon Kanak'] || data.zonKanak) || 0) + 
+              (parseInt(data['Zon Kuning'] || data.zonKuning) || 0) + 
+              (parseInt(data['Zon Hijau'] || data.zonHijau) || 0);
+  document.getElementById('dTotal').innerText = total;
+  
+  document.getElementById('dLosPsi').innerText = data['LOS Psikiatrik'] || data.losPsikiatrik || 0; 
+  document.getElementById('dLosHijau').innerText = data['LOS Hijau'] || data.losHijau || 0;
+  document.getElementById('dBlue').innerText = data['Code Blue'] || data.codeBlue || 0; 
+  document.getElementById('dGray').innerText = data['Code Gray'] || data.codeGray || 0; 
+  document.getElementById('dBlack').innerText = data['Code Black'] || data.codeBlack || 0;
+  document.getElementById('dCna').innerText = data['CNA'] || data.cna || 0; 
+  document.getElementById('dAor').innerText = data['AOR'] || data.aor || 0;
+  document.getElementById('dVentBaik').innerText = data['Vent Baik'] || data.ventBaik || 0; 
+  document.getElementById('dVentRosak').innerText = data['Vent Rosak'] || data.ventRosak || 0; 
+  document.getElementById('dVentRepair').innerText = data['Vent Repair'] || data.ventRepair || 0;
+  
+  function statusColor(val){
+    return val === "Normal" ? "<span class='status-normal'>Normal</span>" : "<span class='status-gangguan'>Gangguan</span>";
+  }
+  
+  document.getElementById('dElektrik').innerHTML = statusColor(data['Elektrik'] || data.elektrik || 'Normal'); 
+  document.getElementById('dAir').innerHTML = statusColor(data['Air'] || data.air || 'Normal');
+  document.getElementById('dAircond').innerHTML = statusColor(data['Aircond'] || data.aircond || 'Normal'); 
+  document.getElementById('dTube').innerHTML = statusColor(data['Tube'] || data.tube || 'Normal');
+  
+  if(parseInt(data['Zon Merah'] || data.zonMerah) > 10){ 
+    document.getElementById('dMerah').style.fontSize = "3em"; 
+    document.getElementById('dMerah').style.color = "#ff0000"; 
+  } else { 
+    document.getElementById('dMerah').style.fontSize = "2em"; 
+    document.getElementById('dMerah').style.color = "#ffffff"; 
+  }
+}
+
+// ===== PRINT =====
+function printReport(){ window.print(); }
+
+// ===== CLOCK =====
+function updateDateTime(){ 
+  const now = new Date(); 
+  const options = {day:'2-digit', month:'long', year:'numeric'}; 
+  const date = now.toLocaleDateString('ms-MY', options); 
+  const time = now.toLocaleTimeString('ms-MY'); 
+  document.getElementById("dateTime").innerHTML = date + " | " + time;
+}
+
+setInterval(updateDateTime, 1000); 
+updateDateTime(); 
+
+// Auto load system if already logged in
+window.onload = function(){
+  if(localStorage.getItem("currentUser")) loadSystem();
+}
+</script>
+</body>
+</html>
